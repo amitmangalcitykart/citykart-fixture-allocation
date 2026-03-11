@@ -46,7 +46,7 @@ def round_robin_allocate(cont_list, mc_fix):
 
     n = len(cont_list)
 
-    targets = [round(c * mc_fix) for c in cont_list]
+    targets = [max(1, round(c * mc_fix)) if c > 0 else 0 for c in cont_list]
 
     alloc = [0] * n
 
@@ -161,36 +161,28 @@ if uploaded_file:
             # RULE 2: MC_FIX > 1
             elif mc_fix > 1:
 
-                special_valid_idx = [
-                    i for i in valid_idx
-                    if df.loc[i, department] == "MU_KNITTED & CASUAL SHIRT H/S"
-                    and df.loc[i, udf06] == "TABLE"
-                ]
+                remaining_idx = valid_idx
+                cont_list = [df.loc[i, cont_col] for i in remaining_idx]
 
-                remaining_mc_fix = int(mc_fix)
+                # round robin allocation
+                final_vals = round_robin_allocate(cont_list, int(mc_fix))
 
-                # STEP 1 → SPECIAL RULE minimum 1 allocation
-                for i in special_valid_idx:
+                for i, val in zip(remaining_idx, final_vals):
+                    df.loc[i, "ALLOC"] += val
 
-                    if remaining_mc_fix <= 0:
-                        break
+                # -------- NEW RULE ----------
+                alloc_values = [df.loc[i, "ALLOC"] for i in remaining_idx]
+                total_alloc = sum(alloc_values)
 
-                    df.loc[i, "ALLOC"] = 1
-                    remaining_mc_fix -= 1
+                if total_alloc > mc_fix:
 
+                    diff = int(total_alloc - mc_fix)
 
-                # STEP 2 → ROUND ROBIN remaining
-                if remaining_mc_fix > 0:
+                    # find index with maximum allocation
+                    max_idx = max(remaining_idx,
+                                key=lambda i: df.loc[i, "ALLOC"])
 
-                    remaining_idx = valid_idx
-
-                    cont_list = [df.loc[i, cont_col] for i in remaining_idx]
-
-                    final_vals = round_robin_allocate(cont_list,
-                                                      remaining_mc_fix)
-
-                    for i, val in zip(remaining_idx, final_vals):
-                        df.loc[i, "ALLOC"] += val
+                    df.loc[max_idx, "ALLOC"] -= diff
 
 
             # FINAL BALANCE FIX
