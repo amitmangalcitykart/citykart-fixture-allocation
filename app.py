@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import os
 
-st.set_page_config(page_title="Citykart Fixture Allocation", layout="wide")
+st.set_page_config(layout="wide")
 
 # ---------- THEME ----------
 st.markdown("""
@@ -23,25 +23,27 @@ body { background-color: #f7f7f7; }
 </style>
 """, unsafe_allow_html=True)
 
+
 # ---------- HEADER ----------
-col1, col2 = st.columns([1,5])
+col1, col2 = st.columns([7,2])
 
 with col1:
-    logo_path = os.path.join(os.path.dirname(__file__), "logo.png.webp")
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=120)
+    st.markdown("<h1 style='color:#c62828;'>Fixture Allocation Tool</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#2e7d32;'>Part 1</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#2e7d32;'>Upload → Allocate → Download</p>", unsafe_allow_html=True)
+    
 
 with col2:
-    st.markdown("<h1 style='color:#c62828;'>Citykart Fixture Allocation Tool</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#2e7d32;'>Upload → Allocate → Download</p>", unsafe_allow_html=True)
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=120)
 
 st.divider()
 
 uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 
-# ===============================
-# ROUND ROBIN FUNCTION
-# ===============================
+
+# ROUND ROBIN
 def round_robin_allocate(cont_list, mc_fix):
 
     n = len(cont_list)
@@ -49,14 +51,13 @@ def round_robin_allocate(cont_list, mc_fix):
     targets = [max(1, round(c * mc_fix)) if c > 0 else 0 for c in cont_list]
 
     alloc = [0] * n
-
     remaining = mc_fix
 
     order = sorted(range(n), key=lambda i: cont_list[i], reverse=True)
 
     while remaining > 0:
 
-        allocated_in_pass = False
+        allocated = False
 
         for i in order:
 
@@ -64,20 +65,20 @@ def round_robin_allocate(cont_list, mc_fix):
 
                 alloc[i] += 1
                 remaining -= 1
-                allocated_in_pass = True
+                allocated = True
 
                 if remaining == 0:
                     break
 
-        if not allocated_in_pass:
+        if not allocated:
             break
 
     return alloc
 
 
-# ===============================
-# MAIN APP
-# ===============================
+# =============================
+# MAIN PROCESS
+# =============================
 if uploaded_file:
 
     df = pd.read_csv(uploaded_file)
@@ -104,20 +105,19 @@ if uploaded_file:
         cont_col = st.selectbox("Cont %", cols)
         mc_col = st.selectbox("MC Fix", cols)
 
+
     if st.button("Run Allocation"):
 
         df = df.copy()
 
         df[cont_col] = pd.to_numeric(df[cont_col], errors="coerce").fillna(0)
-        df[mc_col]   = pd.to_numeric(df[mc_col], errors="coerce").fillna(0)
+        df[mc_col] = pd.to_numeric(df[mc_col], errors="coerce").fillna(0)
 
         group_cols = [store, division, section, groupc, department, udf06, floor]
 
         df["ALLOC"] = 0.0
 
-        # ===============================
-        # YOUR EXACT DISTRIBUTION LOGIC
-        # ===============================
+
         for keys, grp in df.groupby(group_cols):
 
             mc_fix = grp.iloc[0][mc_col]
@@ -128,7 +128,7 @@ if uploaded_file:
 
             valid_count = len(valid_idx)
 
-            # RULE 0: MC_FIX == 0.5
+
             if mc_fix == 0.5:
 
                 if valid_count > 0:
@@ -141,7 +141,6 @@ if uploaded_file:
                 continue
 
 
-            # RULE 1: MC_FIX == 1
             if mc_fix == 1:
 
                 sorted_valid = sorted(valid_idx,
@@ -149,7 +148,6 @@ if uploaded_file:
                                       reverse=True)
 
                 if valid_count == 1:
-
                     df.loc[sorted_valid[0], "ALLOC"] = 1
 
                 elif valid_count >= 2:
@@ -157,11 +155,32 @@ if uploaded_file:
                     df.loc[sorted_valid[0], "ALLOC"] = 0.5
                     df.loc[sorted_valid[1], "ALLOC"] = 0.5
 
+            if mc_fix == 2:
 
-            # RULE 2: MC_FIX > 1
-            elif mc_fix > 1:
+                sorted_valid = sorted(valid_idx,
+                                    key=lambda i: df.loc[i, cont_col],
+                                    reverse=True)
+
+                if valid_count == 1:
+
+                    df.loc[sorted_valid[0], "ALLOC"] = 2
+
+                elif valid_count == 2:
+
+                    df.loc[sorted_valid[0], "ALLOC"] = 1
+                    df.loc[sorted_valid[1], "ALLOC"] = 1
+
+                elif valid_count >= 2:
+
+                    df.loc[sorted_valid[0], "ALLOC"] = 1
+                    df.loc[sorted_valid[1], "ALLOC"] = 0.5
+                    df.loc[sorted_valid[2], "ALLOC"] = 0.5
+
+
+            elif mc_fix > 2:
 
                 remaining_idx = valid_idx
+
                 cont_list = [df.loc[i, cont_col] for i in remaining_idx]
 
                 # round robin allocation
@@ -179,13 +198,14 @@ if uploaded_file:
                     diff = int(total_alloc - mc_fix)
 
                     # find index with maximum allocation
-                    max_idx = max(remaining_idx,
-                                key=lambda i: df.loc[i, "ALLOC"])
+                    max_idx = max(
+                        remaining_idx,
+                        key=lambda i: df.loc[i, "ALLOC"]
+                    )
 
                     df.loc[max_idx, "ALLOC"] -= diff
 
 
-            # FINAL BALANCE FIX
             allocated_sum = df.loc[idx_list, "ALLOC"].sum()
 
             balance = mc_fix - allocated_sum
@@ -198,15 +218,14 @@ if uploaded_file:
                 df.loc[highest_idx, "ALLOC"] += 1
 
 
-        # Rename columns
         df.rename(columns={
             cont_col: "CONT_PCT",
             mc_col: "MC_FIX"
         }, inplace=True)
 
+
         st.success("Allocation Completed Successfully!")
 
-        # download
         buffer = io.BytesIO()
 
         df.to_csv(buffer, index=False)
