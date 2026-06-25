@@ -29,7 +29,7 @@ col1, col2 = st.columns([7,2])
 
 with col1:
     st.markdown("<h1 style='color:#c62828;'>Fixture Allocation Tool</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#2e7d32;'>Part 1</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#2e7d32;'>Part 2</p>", unsafe_allow_html=True)
     st.markdown("<p style='color:#2e7d32;'>Upload → Allocate → Download</p>", unsafe_allow_html=True)
     
 
